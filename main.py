@@ -28,7 +28,7 @@ if not BOT_TOKEN:
     logger.error("❌ BOT_TOKEN not found! Please set your bot token in environment variables.")
     sys.exit(1)
 
-REQUIRED_CHANNELS = ["@automodskin_bot"]
+REQUIRED_CHANNELS = ["@HackModFF"]
 GROUP_JOIN_LINK = "https://t.me/HackModFF"
 OWNER_ID = 7628071286
 OWNER_USERNAME = "@classclall"
