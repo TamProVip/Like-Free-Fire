@@ -42,17 +42,26 @@ app = Flask(__name__)
 # === DATA RESET ===
 
 def reset_limits():
-    """Daily reset of usage tracker (in-memory only)."""
+    """Daily reset of usage tracker theo giờ Việt Nam (GMT+7)."""
     while True:
         try:
-            # Calculate time until next 00:00 UTC
+            # Lấy giờ UTC hiện tại
             now_utc = datetime.utcnow()
-            next_reset = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            sleep_seconds = (next_reset - now_utc).total_seconds()
+            # Chuyển sang giờ Việt Nam (UTC+7)
+            now_vn = now_utc + timedelta(hours=7)
+            # Tính thời gian đến 00:00 giờ Việt Nam hôm sau
+            next_reset_vn = (now_vn + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            # Chuyển ngược về UTC để tính sleep
+            next_reset_utc = next_reset_vn - timedelta(hours=7)
+            sleep_seconds = (next_reset_utc - now_utc).total_seconds()
+
+            # Đảm bảo sleep_seconds không âm
+            if sleep_seconds < 0:
+                sleep_seconds = 0
 
             time.sleep(sleep_seconds)
             like_tracker.clear()
-            logger.info("✅ Daily limits reset at 00:00 UTC (in-memory).")
+            logger.info(f"✅ Daily limits reset at 00:00 Vietnam time ({(datetime.utcnow() + timedelta(hours=7)).strftime('%H:%M')} VN)")
         except Exception as e:
             logger.error(f"Error in reset_limits thread: {e}")
 
@@ -87,7 +96,7 @@ def call_api(region, uid):
 def get_user_limit(user_id):
     if user_id == OWNER_ID:
         return 999999999  # Unlimited for owner
-    return 1  # 1 request per day for regular users
+    return 10  # 1 request per day for regular users
 
 
 # Start background thread
@@ -131,7 +140,9 @@ def start_command(message):
         bot.reply_to(message, "📢 Channel Membership Required\nTo use this bot, you must join all our channels first", reply_markup=markup, parse_mode="Markdown")
         return
     if user_id not in like_tracker:
-        like_tracker[user_id] = {"used": 0, "last_used": datetime.now() - timedelta(days=1)}
+        # Dùng giờ Việt Nam cho last_used
+        now_vn = datetime.utcnow() + timedelta(hours=7)
+        like_tracker[user_id] = {"used": 0, "last_used": now_vn - timedelta(days=1)}
     bot.reply_to(message, "✅ You're verified! Use /like to send likes.", parse_mode="Markdown")
 
 
@@ -169,12 +180,13 @@ def handle_like(message):
 
 def process_like(message, region, uid):
     user_id = message.from_user.id
-    now_utc = datetime.utcnow()
-    usage = like_tracker.get(user_id, {"used": 0, "last_used": now_utc - timedelta(days=1)})
+    # Sử dụng giờ Việt Nam cho tracking
+    now_vn = datetime.utcnow() + timedelta(hours=7)
+    usage = like_tracker.get(user_id, {"used": 0, "last_used": now_vn - timedelta(days=1)})
 
-    # Check if it's a new day (00:00 UTC reset)
+    # Check if it's a new day (00:00 Vietnam time)
     last_used_date = usage["last_used"].date()
-    current_date = now_utc.date()
+    current_date = now_vn.date()
     if current_date > last_used_date:
         usage["used"] = 0
 
@@ -219,7 +231,7 @@ def process_like(message, region, uid):
         total_like = likes_after
 
         usage["used"] += 1
-        usage["last_used"] = now_utc
+        usage["last_used"] = now_vn
         like_tracker[user_id] = usage
         
         response_text = f"""✅ *Request Processed Successfully*\n\n👤 *Name:* `{player_name}`\n🆔 *UID:* `{player_uid}`\n🌍 *Region:* `{region}`\n🤡 *Likes Before:* `{likes_before}`\n📈 *Likes Added:* `{likes_given}`\n🗿 *Total Likes Now:* `{total_like}`\n🔐 *Remaining Requests:* `{max_limit - usage['used']}`\n👑 *Credit:* @itzpaglu"""
@@ -372,4 +384,3 @@ if __name__ == "__main__":
                 else:
                     logger.error("Max retries reached. Exiting.")
                     sys.exit(1)
-
