@@ -3,7 +3,7 @@ import telebot
 import requests
 import time
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone  # 👈 ĐÃ THÊM timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask, request, jsonify
 import logging
@@ -45,8 +45,8 @@ def reset_limits():
     """Daily reset of usage tracker theo giờ Việt Nam (GMT+7)."""
     while True:
         try:
-            # Lấy giờ UTC hiện tại
-            now_utc = datetime.utcnow()
+            # 👇 SỬA: dùng timezone-aware
+            now_utc = datetime.now(timezone.utc)
             # Chuyển sang giờ Việt Nam (UTC+7)
             now_vn = now_utc + timedelta(hours=7)
             # Tính thời gian đến 00:00 giờ Việt Nam hôm sau
@@ -61,7 +61,7 @@ def reset_limits():
 
             time.sleep(sleep_seconds)
             like_tracker.clear()
-            logger.info(f"✅ Daily limits reset at 00:00 Vietnam time ({(datetime.utcnow() + timedelta(hours=7)).strftime('%H:%M')} VN)")
+            logger.info(f"✅ Daily limits reset at 00:00 Vietnam time ({(datetime.now(timezone.utc) + timedelta(hours=7)).strftime('%H:%M')} VN)")
         except Exception as e:
             logger.error(f"Error in reset_limits thread: {e}")
 
@@ -96,7 +96,7 @@ def call_api(region, uid):
 def get_user_limit(user_id):
     if user_id == OWNER_ID:
         return 999999999  # Unlimited for owner
-    return 10  # 1 request per day for regular users
+    return 1  # 1 request per day for regular users
 
 
 # Start background thread
@@ -140,8 +140,9 @@ def start_command(message):
         bot.reply_to(message, "📢 Channel Membership Required\nTo use this bot, you must join all our channels first", reply_markup=markup, parse_mode="Markdown")
         return
     if user_id not in like_tracker:
-        # Dùng giờ Việt Nam cho last_used
-        now_vn = datetime.utcnow() + timedelta(hours=7)
+        # 👇 SỬA: dùng timezone-aware
+        now_utc = datetime.now(timezone.utc)
+        now_vn = now_utc + timedelta(hours=7)
         like_tracker[user_id] = {"used": 0, "last_used": now_vn - timedelta(days=1)}
     bot.reply_to(message, "✅ You're verified! Use /like to send likes.", parse_mode="Markdown")
 
@@ -180,8 +181,9 @@ def handle_like(message):
 
 def process_like(message, region, uid):
     user_id = message.from_user.id
-    # Sử dụng giờ Việt Nam cho tracking
-    now_vn = datetime.utcnow() + timedelta(hours=7)
+    # 👇 SỬA: dùng timezone-aware
+    now_utc = datetime.now(timezone.utc)
+    now_vn = now_utc + timedelta(hours=7)
     usage = like_tracker.get(user_id, {"used": 0, "last_used": now_vn - timedelta(days=1)})
 
     # Check if it's a new day (00:00 Vietnam time)
